@@ -15,13 +15,15 @@ ffprofile uninstall         Remove installed apps
 
 ## Install
 
-Compile with:
-
 ```sh
-swiftc main.swift -o ffprofile -framework Cocoa -framework ApplicationServices
+make install
 ```
 
-Move the binary somewhere on your `$PATH`, e.g. `/usr/local/bin/ffprofile`.
+Builds and installs to `/usr/local/bin`. Override the prefix if needed:
+
+```sh
+make install PREFIX=/opt/homebrew
+```
 
 ### Spotlight apps
 
