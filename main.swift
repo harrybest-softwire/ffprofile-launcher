@@ -128,10 +128,19 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
     )
     guard !firefoxPids.isEmpty else { return nil }
 
-    let procs = allPids()
     let target = "-profile \(fullPath)"
 
-    for kp in procs {
+    // Fast path: check main Firefox process args directly (1 sysctl per instance).
+    for pid in firefoxPids {
+        guard let args = getProcessArgs(pid) else { continue }
+        if args.contains(target) || args.contains("-P \(profileName)") {
+            return pid
+        }
+    }
+
+    // Slow path: scan child processes for -profile/-parentPid args.
+    // Needed when the main process args don't expose the profile directly.
+    for kp in allPids() {
         let ppid = kp.kp_eproc.e_ppid
         guard firefoxPids.contains(ppid) else { continue }
 
@@ -143,15 +152,6 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
         let rest = args[parentRange.upperBound...]
         let pidStr = rest.prefix(while: { $0.isNumber })
         if let pid = pid_t(pidStr), pid > 0 {
-            return pid
-        }
-    }
-
-    // Fallback: check the main Firefox process args directly. Firefox may not
-    // propagate -profile to child processes for the default profile.
-    for pid in firefoxPids {
-        guard let args = getProcessArgs(pid) else { continue }
-        if args.contains(target) || args.contains("-P \(profileName)") {
             return pid
         }
     }
@@ -185,7 +185,7 @@ func focusProcess(_ pid: pid_t) {
 
     if let app = NSRunningApplication(processIdentifier: pid) {
         app.activate()
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
     }
 }
 
