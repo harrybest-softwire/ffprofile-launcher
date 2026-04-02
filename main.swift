@@ -471,6 +471,11 @@ case "uninstall":
         exit(1)
     }
 
+case "_complete":
+    if let profiles = try? parseProfiles() {
+        for p in profiles { print(p.name) }
+    }
+
 default:
     fputs("unknown command: \(args[1])\n", stderr)
     usage()

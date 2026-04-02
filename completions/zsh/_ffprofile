@@ -1,0 +1,37 @@
+#compdef ffprofile
+
+_ffprofile_profiles() {
+    local -a profiles
+    profiles=(${(f)"$(ffprofile _complete 2>/dev/null)"})
+    _describe 'profile' profiles
+}
+
+_ffprofile() {
+    local state
+
+    _arguments \
+        '1:command:->command' \
+        '*::args:->args'
+
+    case $state in
+        command)
+            local -a commands
+            commands=(
+                'list:list available profiles'
+                'launch:launch or focus a profile'
+                'install:install per-profile Spotlight apps'
+                'uninstall:remove installed Spotlight apps'
+            )
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                launch)
+                    _ffprofile_profiles
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_ffprofile

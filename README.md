@@ -31,6 +31,27 @@ If using a custom prefix, ensure the bin directory is on your `$PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+### Shell completions
+
+Installs completion scripts for zsh and bash:
+
+```sh
+make install-completions PREFIX=~/.local
+```
+
+For zsh, ensure the install directory is on your `fpath` (e.g. `~/.local/share/zsh/site-functions`):
+
+```sh
+fpath=(~/.local/share/zsh/site-functions $fpath)
+autoload -Uz compinit && compinit
+```
+
+For bash, source the file in your `.bashrc`:
+
+```sh
+source ~/.local/share/bash-completion/completions/ffprofile
+```
+
 ### Spotlight apps
 
 `ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock and invoke `ffprofile launch <name>` when opened.

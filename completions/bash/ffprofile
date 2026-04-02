@@ -1,0 +1,20 @@
+_ffprofile() {
+    local cur prev
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ $COMP_CWORD -eq 1 ]]; then
+        COMPREPLY=($(compgen -W "list launch install uninstall" -- "$cur"))
+        return
+    fi
+
+    case "$prev" in
+        launch)
+            local profiles
+            profiles=$(ffprofile _complete 2>/dev/null)
+            COMPREPLY=($(compgen -W "$profiles" -- "$cur"))
+            ;;
+    esac
+}
+
+complete -F _ffprofile ffprofile
