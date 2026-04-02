@@ -11,7 +11,13 @@ ffprofile install           Install per-profile apps to ~/Applications
 ffprofile uninstall         Remove installed apps
 ```
 
-`launch` accepts fuzzy input — exact, prefix, substring, and fuzzy character matches are all tried in order.
+`launch` accepts fuzzy input — exact, prefix, substring, and fuzzy character matches are all tried in order. Pipe a URL to open it in the launched profile:
+
+```sh
+echo "https://example.com" | ffprofile launch personal
+```
+
+If the profile is already running its window is focused; otherwise a new instance is started. Either way the URL opens in the correct profile.
 
 ## Install
 
