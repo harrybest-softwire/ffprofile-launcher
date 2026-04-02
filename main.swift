@@ -442,19 +442,19 @@ case "list":
     }
 
 case "launch":
-    guard args.count >= 3 else {
-        fputs("error: profile name required\n", stderr)
-        usage()
-        exit(1)
-    }
-
-    let input = args[2...].joined(separator: " ")
-
     let profiles: [Profile]
     do { profiles = try parseProfiles() } catch {
         fputs("error: \(error)\n", stderr)
         exit(1)
     }
+
+    guard args.count >= 3 else {
+        fputs("error: profile name required\n\ndiscovered profiles:\n", stderr)
+        listProfiles(profiles)
+        exit(1)
+    }
+
+    let input = args[2...].joined(separator: " ")
 
     let (matches, method) = matchProfile(profiles, input)
 
