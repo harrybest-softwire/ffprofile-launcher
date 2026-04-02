@@ -19,10 +19,16 @@ ffprofile uninstall         Remove installed apps
 make install
 ```
 
-Builds and installs to `/usr/local/bin`. Override the prefix if needed:
+Builds and installs to `/usr/local/bin`. Override the prefix if needed, e.g. to install to `~/.local/bin`:
 
 ```sh
-make install PREFIX=/opt/homebrew
+make install PREFIX=~/.local
+```
+
+If using a custom prefix, ensure the bin directory is on your `$PATH`:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ### Spotlight apps
