@@ -191,19 +191,44 @@ func focusProcess(_ pid: pid_t) {
 
 // MARK: - Launch
 
-func launchProfile(_ profile: Profile) {
+func openURLViaAppleEvent(_ pid: pid_t, _ url: String) {
+    // Send a GURL/GURL (GetURL) Apple Event directly to the target PID.
+    // This is exactly what `open -a Firefox url` does internally, but
+    // targeting by PID ensures it lands in the right profile instance.
+    let target = NSAppleEventDescriptor(processIdentifier: pid)
+    let event = NSAppleEventDescriptor(
+        eventClass: AEEventClass(0x4755524C), // 'GURL'
+        eventID: AEEventID(0x4755524C),       // 'GURL'
+        targetDescriptor: target,
+        returnID: Int16(kAutoGenerateReturnID),
+        transactionID: Int32(kAnyTransactionID)
+    )
+    event.setParam(NSAppleEventDescriptor(string: url), forKeyword: AEKeyword(keyDirectObject))
+    do {
+        try event.sendEvent(options: .noReply, timeout: 30)
+    } catch {
+        fputs("warning: couldn't send URL event: \(error)\n", stderr)
+    }
+}
+
+func launchProfile(_ profile: Profile, url: String? = nil) {
     if let pid = findRunningProfile(profile.path, name: profile.name) {
         let wc = windowCount(pid)
         fputs("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n", stderr)
         if wc > 0 {
             focusProcess(pid)
+            if let url = url {
+                openURLViaAppleEvent(pid, url)
+            }
             return
         }
     }
 
     let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-    proc.arguments = ["-n", "-a", "Firefox", "--args", "-P", profile.name, "-no-remote", "-new-window"]
+    proc.executableURL = URL(fileURLWithPath: "/Applications/Firefox.app/Contents/MacOS/firefox")
+    var arguments = ["-P", profile.name, "-no-remote", "-new-window"]
+    if let url { arguments.append(url) }
+    proc.arguments = arguments
     do { try proc.run() } catch {
         fputs("error launching Firefox: \(error)\n", stderr)
         exit(1)
@@ -390,7 +415,7 @@ func uninstallApps() throws {
 func usage() {
     fputs("Usage:\n", stderr)
     fputs("  ffprofile list              List available profiles\n", stderr)
-    fputs("  ffprofile launch <profile>  Launch a profile\n", stderr)
+    fputs("  ffprofile launch <profile>  Launch a profile (pipe a URL to open it)\n", stderr)
     fputs("  ffprofile install           Install Spotlight apps\n", stderr)
     fputs("  ffprofile uninstall         Remove Spotlight apps\n", stderr)
 }
@@ -453,7 +478,17 @@ case "launch":
         fputs("matched \"\(matched.name)\" (\(method))\n", stderr)
     }
 
-    launchProfile(matched)
+    var url: String? = nil
+    if isatty(STDIN_FILENO) == 0 {
+        let data = FileHandle.standardInput.readDataToEndOfFile()
+        let trimmed = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty {
+            url = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        }
+    }
+
+
+    launchProfile(matched, url: url)
 
 case "install":
     do {
@@ -475,6 +510,7 @@ case "_complete":
     if let profiles = try? parseProfiles() {
         for p in profiles { print(p.name) }
     }
+
 
 default:
     fputs("unknown command: \(args[1])\n", stderr)
