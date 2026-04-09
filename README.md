@@ -1,14 +1,14 @@
 # ffprofile
 
-A macOS command-line tool for managing and launching Firefox profiles. Supports fuzzy profile matching, focusing existing windows, and installing per-profile Spotlight apps with generated icons.
+A macOS command-line tool for managing and launching Firefox profiles. Supports fuzzy profile matching, focusing existing windows, installing per-profile Spotlight apps with generated icons, and right-click Services for opening links in a specific profile.
 
 ## Usage
 
 ```
 ffprofile list              List available profiles
 ffprofile launch <profile>  Launch or focus a profile
-ffprofile install           Install per-profile apps to ~/Applications
-ffprofile uninstall         Remove installed apps
+ffprofile install           Install per-profile apps and Services
+ffprofile uninstall         Remove installed apps and Services
 ```
 
 `launch` accepts fuzzy input — exact, prefix, substring, and fuzzy character matches are all tried in order. Pipe a URL to open it in the launched profile:
@@ -61,6 +61,12 @@ source ~/.local/share/bash-completion/completions/ffprofile
 ### Spotlight apps
 
 `ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock and invoke `ffprofile launch <name>` when opened.
+
+### Right-click Services
+
+`ffprofile install` also installs a macOS Service for each profile into `~/Library/Services`. When text is selected (e.g. a URL), right-clicking shows "Open in ProfileName - Firefox" entries under the Services submenu. The selected text is piped to `ffprofile launch` as a URL.
+
+This works in Safari, Mail, and most native apps. Whether the URL or the visible link text is passed depends on the app — most pass the URL when right-clicking a hyperlink.
 
 ## Requirements
 
