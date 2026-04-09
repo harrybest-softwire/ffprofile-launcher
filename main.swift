@@ -99,13 +99,31 @@ func matchProfile(_ profiles: [Profile], _ input: String) -> (matches: [Profile]
 
 // MARK: - Find running profile
 
-func getProcessArgs(_ pid: pid_t) -> String? {
+func getProcessArgs(_ pid: pid_t) -> [String]? {
     var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
     var size: Int = 0
     guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 0 else { return nil }
     var buf = [UInt8](repeating: 0, count: size)
-    guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0 else { return nil }
-    return String(buf.prefix(size).map { Character(UnicodeScalar($0 == 0 ? UInt8(0x20) : $0)) })
+    guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0, size >= 4 else { return nil }
+
+    let argc = Int(UInt32(buf[0]) | (UInt32(buf[1]) << 8) | (UInt32(buf[2]) << 16) | (UInt32(buf[3]) << 24))
+
+    // Skip past the saved exe path
+    var i = 4
+    while i < size && buf[i] != 0 { i += 1 }
+    while i < size && buf[i] == 0 { i += 1 }
+
+    // Parse argc null-terminated argument strings
+    var args: [String] = []
+    var start = i
+    while i < size && args.count < argc {
+        if buf[i] == 0 {
+            if let s = String(bytes: buf[start..<i], encoding: .utf8) { args.append(s) }
+            start = i + 1
+        }
+        i += 1
+    }
+    return args.isEmpty ? nil : args
 }
 
 func allPids() -> [kinfo_proc] {
@@ -128,12 +146,11 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
     )
     guard !firefoxPids.isEmpty else { return nil }
 
-    let target = "-profile \(fullPath)"
-
     // Fast path: check main Firefox process args directly (1 sysctl per instance).
     for pid in firefoxPids {
         guard let args = getProcessArgs(pid) else { continue }
-        if args.contains(target) || args.contains("-P \(profileName)") {
+        let pairs = zip(args, args.dropFirst())
+        if pairs.contains(where: { ($0 == "-profile" && $1 == fullPath) || ($0 == "-P" && $1 == profileName) }) {
             return pid
         }
     }
@@ -145,15 +162,15 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
         guard firefoxPids.contains(ppid) else { continue }
 
         let childPid = kp.kp_proc.p_pid
-        guard let args = getProcessArgs(childPid),
-              args.contains(target),
-              let parentRange = args.range(of: "-parentPid ") else { continue }
+        guard let args = getProcessArgs(childPid) else { continue }
 
-        let rest = args[parentRange.upperBound...]
-        let pidStr = rest.prefix(while: { $0.isNumber })
-        if let pid = pid_t(pidStr), pid > 0 {
-            return pid
-        }
+        let hasProfile = zip(args, args.dropFirst()).contains { $0 == "-profile" && $1 == fullPath }
+        guard hasProfile else { continue }
+
+        guard let idx = args.firstIndex(of: "-parentPid"),
+              idx + 1 < args.count,
+              let pid = pid_t(args[idx + 1]), pid > 0 else { continue }
+        return pid
     }
 
     return nil
