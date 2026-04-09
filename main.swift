@@ -409,6 +409,284 @@ func installApps() throws {
     }
 }
 
+// MARK: - Services
+
+func xmlEscape(_ s: String) -> String {
+    s.replacingOccurrences(of: "&", with: "&amp;")
+     .replacingOccurrences(of: "<", with: "&lt;")
+     .replacingOccurrences(of: ">", with: "&gt;")
+}
+
+func installServices() throws {
+    let profiles = try parseProfiles()
+    let fm = FileManager.default
+    let servicesDir = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Services")
+    try fm.createDirectory(at: servicesDir, withIntermediateDirectories: true)
+
+    for profile in profiles {
+        let workflowName = "\(profile.name) - Firefox.workflow"
+        let contentsDir = servicesDir.appendingPathComponent(workflowName).appendingPathComponent("Contents")
+        let resourcesDir = contentsDir.appendingPathComponent("Resources")
+        try fm.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+
+        let menuName = "Open in \(profile.name) - Firefox"
+        let bundleId = "com.ffprofile.service.\(profile.name.lowercased().replacingOccurrences(of: " ", with: "-"))"
+
+        let infoPlist = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en_US</string>
+            <key>CFBundleIdentifier</key>
+            <string>\(bundleId)</string>
+            <key>CFBundleName</key>
+            <string>\(xmlEscape(menuName))</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>NSServices</key>
+            <array>
+                <dict>
+                    <key>NSMenuItem</key>
+                    <dict>
+                        <key>default</key>
+                        <string>\(xmlEscape(menuName))</string>
+                    </dict>
+                    <key>NSMessage</key>
+                    <string>runWorkflowAsService</string>
+                    <key>NSSendTypes</key>
+                    <array>
+                        <string>public.utf8-plain-text</string>
+                    </array>
+                </dict>
+            </array>
+        </dict>
+        </plist>
+        """
+
+        let shellName = xmlEscape(profile.name.replacingOccurrences(of: "\"", with: "\\\""))
+        let inputUUID = UUID().uuidString
+        let outputUUID = UUID().uuidString
+        let actionUUID = UUID().uuidString
+
+        let documentWflow = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>AMApplicationBuild</key>
+            <string>521.1</string>
+            <key>AMApplicationVersion</key>
+            <string>2.10</string>
+            <key>AMDocumentVersion</key>
+            <string>2</string>
+            <key>actions</key>
+            <array>
+                <dict>
+                    <key>action</key>
+                    <dict>
+                        <key>AMAccepts</key>
+                        <dict>
+                            <key>Container</key>
+                            <string>List</string>
+                            <key>Optional</key>
+                            <true/>
+                            <key>Types</key>
+                            <array>
+                                <string>com.apple.cocoa.string</string>
+                            </array>
+                        </dict>
+                        <key>AMActionVersion</key>
+                        <string>2.0.3</string>
+                        <key>AMApplication</key>
+                        <array>
+                            <string>Automator</string>
+                        </array>
+                        <key>AMParameterProperties</key>
+                        <dict>
+                            <key>COMMAND_STRING</key>
+                            <dict/>
+                            <key>CheckedForUserDefaultShell</key>
+                            <dict/>
+                            <key>inputMethod</key>
+                            <dict/>
+                            <key>shell</key>
+                            <dict/>
+                            <key>source</key>
+                            <dict/>
+                        </dict>
+                        <key>AMProvides</key>
+                        <dict>
+                            <key>Container</key>
+                            <string>List</string>
+                            <key>Types</key>
+                            <array>
+                                <string>com.apple.cocoa.string</string>
+                            </array>
+                        </dict>
+                        <key>ActionBundlePath</key>
+                        <string>/System/Library/Automator/Run Shell Script.action</string>
+                        <key>ActionName</key>
+                        <string>Run Shell Script</string>
+                        <key>ActionParameters</key>
+                        <dict>
+                            <key>COMMAND_STRING</key>
+                            <string>PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+        ffprofile launch "\(shellName)"</string>
+                            <key>CheckedForUserDefaultShell</key>
+                            <true/>
+                            <key>inputMethod</key>
+                            <integer>0</integer>
+                            <key>shell</key>
+                            <string>/bin/sh</string>
+                            <key>source</key>
+                            <string></string>
+                        </dict>
+                        <key>BundleIdentifier</key>
+                        <string>com.apple.RunShellScript</string>
+                        <key>CFBundleVersion</key>
+                        <string>2.0.3</string>
+                        <key>CanShowSelectedItemsWhenRun</key>
+                        <false/>
+                        <key>CanShowWhenRun</key>
+                        <true/>
+                        <key>Category</key>
+                        <array>
+                            <string>AMCategoryUtilities</string>
+                        </array>
+                        <key>Class Name</key>
+                        <string>RunShellScriptAction</string>
+                        <key>InputUUID</key>
+                        <string>\(inputUUID)</string>
+                        <key>Keywords</key>
+                        <array>
+                            <string>Shell</string>
+                            <string>Script</string>
+                            <string>Command</string>
+                            <string>Run</string>
+                            <string>Unix</string>
+                        </array>
+                        <key>OutputUUID</key>
+                        <string>\(outputUUID)</string>
+                        <key>UUID</key>
+                        <string>\(actionUUID)</string>
+                        <key>UnlocalizedApplications</key>
+                        <array>
+                            <string>Automator</string>
+                        </array>
+                        <key>arguments</key>
+                        <dict>
+                            <key>0</key>
+                            <dict>
+                                <key>default value</key>
+                                <integer>0</integer>
+                                <key>name</key>
+                                <string>inputMethod</string>
+                                <key>required</key>
+                                <string>0</string>
+                                <key>type</key>
+                                <string>0</string>
+                                <key>uuid</key>
+                                <string>0</string>
+                            </dict>
+                            <key>1</key>
+                            <dict>
+                                <key>default value</key>
+                                <string></string>
+                                <key>name</key>
+                                <string>source</string>
+                                <key>required</key>
+                                <string>0</string>
+                                <key>type</key>
+                                <string>0</string>
+                                <key>uuid</key>
+                                <string>1</string>
+                            </dict>
+                            <key>2</key>
+                            <dict>
+                                <key>default value</key>
+                                <false/>
+                                <key>name</key>
+                                <string>CheckedForUserDefaultShell</string>
+                                <key>required</key>
+                                <string>0</string>
+                                <key>type</key>
+                                <string>0</string>
+                                <key>uuid</key>
+                                <string>2</string>
+                            </dict>
+                            <key>3</key>
+                            <dict>
+                                <key>default value</key>
+                                <string></string>
+                                <key>name</key>
+                                <string>COMMAND_STRING</string>
+                                <key>required</key>
+                                <string>0</string>
+                                <key>type</key>
+                                <string>0</string>
+                                <key>uuid</key>
+                                <string>3</string>
+                            </dict>
+                            <key>4</key>
+                            <dict>
+                                <key>default value</key>
+                                <string>/bin/sh</string>
+                                <key>name</key>
+                                <string>shell</string>
+                                <key>required</key>
+                                <string>0</string>
+                                <key>type</key>
+                                <string>0</string>
+                                <key>uuid</key>
+                                <string>4</string>
+                            </dict>
+                        </dict>
+                        <key>isViewVisible</key>
+                        <true/>
+                        <key>location</key>
+                        <string>309.500000:253.000000</string>
+                        <key>nibPath</key>
+                        <string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/en.lproj/main.nib</string>
+                    </dict>
+                    <key>isViewVisible</key>
+                    <true/>
+                </dict>
+            </array>
+            <key>connectors</key>
+            <dict/>
+            <key>workflowMetaData</key>
+            <dict>
+                <key>serviceApplicationBundleID</key>
+                <string></string>
+                <key>serviceApplicationPath</key>
+                <string></string>
+                <key>serviceInputTypeIdentifier</key>
+                <string>com.apple.Automator.text</string>
+                <key>serviceOutputTypeIdentifier</key>
+                <string>com.apple.Automator.nothing</string>
+                <key>serviceProcessesInput</key>
+                <integer>0</integer>
+                <key>workflowTypeIdentifier</key>
+                <string>com.apple.Automator.servicesMenu</string>
+            </dict>
+        </dict>
+        </plist>
+        """
+
+        try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+        try documentWflow.write(to: resourcesDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
+        print("installed service \"\(menuName)\"")
+    }
+
+    let pbs = Process()
+    pbs.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
+    pbs.arguments = ["-update"]
+    try? pbs.run()
+    pbs.waitUntilExit()
+}
+
 // MARK: - Uninstall
 
 func uninstallApps() throws {
@@ -426,14 +704,29 @@ func uninstallApps() throws {
     }
 }
 
+func uninstallServices() throws {
+    let profiles = try parseProfiles()
+    let fm = FileManager.default
+    let servicesDir = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Services")
+
+    for profile in profiles {
+        let workflowName = "\(profile.name) - Firefox.workflow"
+        let workflowPath = servicesDir.appendingPathComponent(workflowName)
+        if fm.fileExists(atPath: workflowPath.path) {
+            try fm.removeItem(at: workflowPath)
+            print("removed service \"\(profile.name) - Firefox\"")
+        }
+    }
+}
+
 // MARK: - Main
 
 func usage() {
     fputs("Usage:\n", stderr)
     fputs("  ffprofile list              List available profiles\n", stderr)
     fputs("  ffprofile launch <profile>  Launch a profile (pipe a URL to open it)\n", stderr)
-    fputs("  ffprofile install           Install Spotlight apps\n", stderr)
-    fputs("  ffprofile uninstall         Remove Spotlight apps\n", stderr)
+    fputs("  ffprofile install           Install Spotlight apps and Services\n", stderr)
+    fputs("  ffprofile uninstall         Remove Spotlight apps and Services\n", stderr)
 }
 
 let args = CommandLine.arguments
@@ -509,6 +802,7 @@ case "launch":
 case "install":
     do {
         try installApps()
+        try installServices()
     } catch {
         fputs("error: \(error)\n", stderr)
         exit(1)
@@ -517,6 +811,7 @@ case "install":
 case "uninstall":
     do {
         try uninstallApps()
+        try uninstallServices()
     } catch {
         fputs("error: \(error)\n", stderr)
         exit(1)
