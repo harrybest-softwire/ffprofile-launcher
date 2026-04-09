@@ -340,8 +340,6 @@ func installApps() throws {
     let profiles = try parseProfiles()
     let fm = FileManager.default
     let appsDir = fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
-    let ffprofilePath = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
-
     try fm.createDirectory(at: appsDir, withIntermediateDirectories: true)
 
     for profile in profiles {
@@ -383,7 +381,8 @@ func installApps() throws {
 
         let script = """
         #!/bin/sh
-        exec "\(ffprofilePath)" launch "\(profile.name)"
+        PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+        exec ffprofile launch "\(profile.name)"
         """
         let runPath = macosDir.appendingPathComponent("run")
         try script.write(to: runPath, atomically: true, encoding: .utf8)
