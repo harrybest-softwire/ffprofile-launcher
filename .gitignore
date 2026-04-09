@@ -1,0 +1,8 @@
+# Binary
+ffprofile
+
+# IDE
+.idea/
+
+# Claude local settings
+.claude/
