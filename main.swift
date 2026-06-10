@@ -129,10 +129,18 @@ func getProcessArgs(_ pid: pid_t) -> [String]? {
 func allPids() -> [kinfo_proc] {
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
     var size: Int = 0
-    sysctl(&mib, 4, nil, &size, nil, 0)
-    var procs = [kinfo_proc](repeating: kinfo_proc(), count: size / MemoryLayout<kinfo_proc>.size)
-    sysctl(&mib, 4, &procs, &size, nil, 0)
-    return procs
+    guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
+    // Processes can spawn between the size query and the fetch, so
+    // over-allocate and retry if the buffer still comes up short.
+    for _ in 0..<3 {
+        size += size / 4
+        var procs = [kinfo_proc](repeating: kinfo_proc(), count: size / MemoryLayout<kinfo_proc>.size)
+        var used = procs.count * MemoryLayout<kinfo_proc>.size
+        if sysctl(&mib, 4, &procs, &used, nil, 0) == 0 {
+            return Array(procs.prefix(used / MemoryLayout<kinfo_proc>.size))
+        }
+    }
+    return []
 }
 
 func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_t? {
@@ -198,11 +206,19 @@ func focusProcess(_ pid: pid_t) {
                 AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, false as CFTypeRef)
             }
         }
+        if let first = windows.first {
+            AXUIElementPerformAction(first, kAXRaiseAction as CFString)
+        }
     }
 
     if let app = NSRunningApplication(processIdentifier: pid) {
-        app.activate()
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        // Activation is asynchronous and can be dropped; retry until it
+        // lands or we time out, rather than hoping one fixed sleep is enough.
+        let deadline = Date(timeIntervalSinceNow: 1.0)
+        repeat {
+            app.activate()
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        } while !app.isActive && Date() < deadline
     }
 }
 
@@ -228,17 +244,38 @@ func openURLViaAppleEvent(_ pid: pid_t, _ url: String) {
     }
 }
 
+func reopenViaAppleEvent(_ pid: pid_t) {
+    // Standard "reopen" event (what clicking the Dock icon sends) — makes
+    // Firefox open a window if it has none, without touching the profile lock.
+    let target = NSAppleEventDescriptor(processIdentifier: pid)
+    let event = NSAppleEventDescriptor(
+        eventClass: AEEventClass(kCoreEventClass),
+        eventID: AEEventID(kAEReopenApplication),
+        targetDescriptor: target,
+        returnID: Int16(kAutoGenerateReturnID),
+        transactionID: Int32(kAnyTransactionID)
+    )
+    do {
+        try event.sendEvent(options: .noReply, timeout: 30)
+    } catch {
+        fputs("warning: couldn't send reopen event: \(error)\n", stderr)
+    }
+}
+
 func launchProfile(_ profile: Profile, url: String? = nil) {
     if let pid = findRunningProfile(profile.path, name: profile.name) {
+        // windowCount only sees on-screen windows, so 0 can just mean
+        // minimized or on another Space. The profile is locked either way —
+        // never start a second instance once a pid is found.
         let wc = windowCount(pid)
         fputs("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n", stderr)
-        if wc > 0 {
-            focusProcess(pid)
-            if let url = url {
-                openURLViaAppleEvent(pid, url)
-            }
-            return
+        focusProcess(pid)
+        if let url = url {
+            openURLViaAppleEvent(pid, url)
+        } else if wc == 0 {
+            reopenViaAppleEvent(pid)
         }
+        return
     }
 
     let proc = Process()
