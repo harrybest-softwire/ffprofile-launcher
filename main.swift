@@ -530,31 +530,26 @@ func installHelperApp() throws {
         try plist.write(to: plistPath, atomically: true, encoding: .utf8)
     }
 
-    // Only replace the embedded binary when the build changed — churning it
-    // unnecessarily risks invalidating the helper's Accessibility grant.
-    let versionPath = resourcesDir.appendingPathComponent("version")
-    let execPath = macosDir.appendingPathComponent("ffprofile")
-    if (try? String(contentsOf: versionPath, encoding: .utf8)) == version,
-       !version.hasSuffix("-dirty"),
-       fm.fileExists(atPath: execPath.path) {
-        return
-    }
-
+    // Only replace the embedded binary when the build actually changed —
+    // churning it risks invalidating the helper's Accessibility grant. The
+    // binary carries the linker's ad-hoc signature, so the copy stays valid.
     guard let selfPath = Bundle.main.executablePath else {
         throw NSError(domain: "ffprofile", code: 1,
                       userInfo: [NSLocalizedDescriptionKey: "can't locate own executable"])
     }
+    let execPath = macosDir.appendingPathComponent("ffprofile")
+    let selfURL = URL(fileURLWithPath: selfPath).resolvingSymlinksInPath()
+    if selfURL == execPath.resolvingSymlinksInPath() {
+        // Running as the helper itself — never replace our own binary.
+        return
+    }
+    if fm.contentsEqual(atPath: selfURL.path, andPath: execPath.path) {
+        return
+    }
     try? fm.removeItem(at: execPath)
-    try fm.copyItem(at: URL(fileURLWithPath: selfPath), to: execPath)
+    try fm.copyItem(at: selfURL, to: execPath)
     try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: execPath.path)
     try createIcns("ffprofile", at: resourcesDir.appendingPathComponent("AppIcon.icns"))
-    try version.write(to: versionPath, atomically: true, encoding: .utf8)
-
-    let codesign = Process()
-    codesign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-    codesign.arguments = ["--force", "--sign", "-", appDir.path]
-    try? codesign.run()
-    codesign.waitUntilExit()
 
     print("installed ffprofile.app (helper)")
 }
