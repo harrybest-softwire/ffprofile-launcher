@@ -871,7 +871,18 @@ case "launch":
         exit(1)
     }
 
-    let input = args[2...].joined(separator: " ")
+    // Internal flag used by the installed apps and Services to pass a URL
+    // through `open --args`, where stdin isn't available.
+    var launchArgs = Array(args[2...])
+    var urlArg: String? = nil
+    if let idx = launchArgs.firstIndex(of: "--url") {
+        if idx + 1 < launchArgs.count {
+            urlArg = launchArgs[idx + 1]
+        }
+        launchArgs.removeSubrange(idx..<min(idx + 2, launchArgs.count))
+    }
+
+    let input = launchArgs.joined(separator: " ")
 
     let (matches, method) = matchProfile(profiles, input)
 
@@ -912,7 +923,9 @@ case "launch":
     }
 
     var url: String? = nil
-    if isatty(STDIN_FILENO) == 0 {
+    if let trimmed = urlArg?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty {
+        url = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+    } else if isatty(STDIN_FILENO) == 0 {
         let data = FileHandle.standardInput.readDataToEndOfFile()
         let trimmed = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmed, !trimmed.isEmpty {
