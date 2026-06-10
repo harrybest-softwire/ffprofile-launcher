@@ -62,6 +62,29 @@ func note(_ msg: String) {
     }
 }
 
+// Post a user notification. Fire-and-forget: the osascript child survives
+// our exit, so callers don't need to wait for it.
+func notify(_ message: String) {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    proc.arguments = [
+        "-e", "on run argv",
+        "-e", "display notification (item 1 of argv) with title \"ffprofile\"",
+        "-e", "end run",
+        message,
+    ]
+    try? proc.run()
+}
+
+// Fatal launch-path error — shown as a notification when no terminal is attached.
+func fail(_ msg: String) -> Never {
+    fputs("error: \(msg)\n", stderr)
+    if isatty(STDERR_FILENO) == 0 {
+        notify(msg)
+    }
+    exit(1)
+}
+
 // MARK: - Listing
 
 func listProfiles(_ profiles: [Profile]) {
@@ -308,14 +331,19 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
             return
         }
 
+        // Cold starts take seconds with no other feedback when launched
+        // from Spotlight — acknowledge the click.
+        if isatty(STDERR_FILENO) == 0 {
+            notify("Launching \(profile.name)…")
+        }
+
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/Applications/Firefox.app/Contents/MacOS/firefox")
         var arguments = ["-P", profile.name, "-no-remote", "-new-window"]
         if let url { arguments.append(url) }
         proc.arguments = arguments
         do { try proc.run() } catch {
-            fputs("error launching Firefox: \(error)\n", stderr)
-            exit(1)
+            fail("couldn't launch Firefox: \(error)")
         }
     }
 }
@@ -861,8 +889,7 @@ case "list":
 case "launch":
     let profiles: [Profile]
     do { profiles = try parseProfiles() } catch {
-        fputs("error: \(error)\n", stderr)
-        exit(1)
+        fail("\(error)")
     }
 
     guard args.count >= 3 else {
@@ -890,6 +917,9 @@ case "launch":
         fputs("error: no profile matching \"\(input)\"\n", stderr)
         fputs("available profiles:\n", stderr)
         listProfiles(profiles)
+        if isatty(STDERR_FILENO) == 0 {
+            notify("no profile matching \"\(input)\"")
+        }
         exit(1)
     }
 
@@ -900,6 +930,9 @@ case "launch":
             fputs("error: \"\(input)\" matches multiple profiles (\(method)):\n", stderr)
             for m in matches {
                 fputs("  \(m.name)\n", stderr)
+            }
+            if isatty(STDERR_FILENO) == 0 {
+                notify("\"\(input)\" matches multiple profiles")
             }
             exit(1)
         }
