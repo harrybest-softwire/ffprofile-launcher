@@ -485,6 +485,71 @@ func pruneStaleBundles(in dir: URL, suffix: String, valid: Set<String>) {
     }
 }
 
+// The helper app does the actual launching for the per-profile apps and
+// Services. Routing through one bundle means Accessibility is granted once,
+// to "ffprofile", and covers every profile.
+func installHelperApp() throws {
+    let fm = FileManager.default
+    let appDir = fm.homeDirectoryForCurrentUser
+        .appendingPathComponent("Applications/ffprofile.app")
+    let contentsDir = appDir.appendingPathComponent("Contents")
+    let macosDir = contentsDir.appendingPathComponent("MacOS")
+    let resourcesDir = contentsDir.appendingPathComponent("Resources")
+    try fm.createDirectory(at: macosDir, withIntermediateDirectories: true)
+    try fm.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+
+    let plist = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>CFBundleName</key>
+        <string>ffprofile</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.ffprofile.helper</string>
+        <key>CFBundleExecutable</key>
+        <string>ffprofile</string>
+        <key>CFBundleIconFile</key>
+        <string>AppIcon</string>
+        <key>LSUIElement</key>
+        <true/>
+    </dict>
+    </plist>
+    """
+    let plistPath = contentsDir.appendingPathComponent("Info.plist")
+    if (try? String(contentsOf: plistPath, encoding: .utf8)) != plist {
+        try plist.write(to: plistPath, atomically: true, encoding: .utf8)
+    }
+
+    // Only replace the embedded binary when the build changed — churning it
+    // unnecessarily risks invalidating the helper's Accessibility grant.
+    let versionPath = resourcesDir.appendingPathComponent("version")
+    let execPath = macosDir.appendingPathComponent("ffprofile")
+    if (try? String(contentsOf: versionPath, encoding: .utf8)) == version,
+       !version.hasSuffix("-dirty"),
+       fm.fileExists(atPath: execPath.path) {
+        return
+    }
+
+    guard let selfPath = Bundle.main.executablePath else {
+        throw NSError(domain: "ffprofile", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "can't locate own executable"])
+    }
+    try? fm.removeItem(at: execPath)
+    try fm.copyItem(at: URL(fileURLWithPath: selfPath), to: execPath)
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: execPath.path)
+    try createIcns("ffprofile", at: resourcesDir.appendingPathComponent("AppIcon.icns"))
+    try version.write(to: versionPath, atomically: true, encoding: .utf8)
+
+    let codesign = Process()
+    codesign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+    codesign.arguments = ["--force", "--sign", "-", appDir.path]
+    try? codesign.run()
+    codesign.waitUntilExit()
+
+    print("installed ffprofile.app (helper)")
+}
+
 func installApps() throws {
     let profiles = try parseProfiles()
     let fm = FileManager.default
@@ -530,6 +595,11 @@ func installApps() throws {
 
         let script = """
         #!/bin/sh
+        # Route through the helper app so its single Accessibility grant applies.
+        if /usr/bin/open -n -a "$HOME/Applications/ffprofile.app" --args launch "\(profile.name)" 2>/dev/null; then
+            exit 0
+        fi
+        # Helper missing — fall back to the PATH binary.
         PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
         if ! err=$(ffprofile launch "\(profile.name)" 2>&1); then
             /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "ffprofile"' -e 'end run' "${err:-ffprofile launch failed}" >/dev/null 2>&1
@@ -672,8 +742,12 @@ func installServices() throws {
                         <key>ActionParameters</key>
                         <dict>
                             <key>COMMAND_STRING</key>
-                            <string>PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
-        if ! err=$(ffprofile launch "\(shellName)" 2&gt;&amp;1); then
+                            <string>url=$(cat)
+        if /usr/bin/open -n -a "$HOME/Applications/ffprofile.app" --args launch "\(shellName)" --url "$url" 2&gt;/dev/null; then
+            exit 0
+        fi
+        PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+        if ! err=$(printf '%s' "$url" | ffprofile launch "\(shellName)" 2&gt;&amp;1); then
             /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "ffprofile"' -e 'end run' "${err:-ffprofile launch failed}" &gt;/dev/null 2&gt;&amp;1
         fi</string>
                             <key>CheckedForUserDefaultShell</key>
@@ -850,6 +924,12 @@ func uninstallApps() throws {
             print("removed \(appName)")
         }
     }
+
+    let helper = appsDir.appendingPathComponent("ffprofile.app")
+    if fm.fileExists(atPath: helper.path) {
+        try fm.removeItem(at: helper)
+        print("removed ffprofile.app")
+    }
 }
 
 func uninstallServices() throws {
@@ -985,6 +1065,7 @@ case "launch":
 
 case "install":
     do {
+        try installHelperApp()
         try installApps()
         try installServices()
     } catch {
