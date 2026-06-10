@@ -437,7 +437,9 @@ func installApps() throws {
         let script = """
         #!/bin/sh
         PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
-        exec ffprofile launch "\(profile.name)"
+        if ! err=$(ffprofile launch "\(profile.name)" 2>&1); then
+            /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "ffprofile"' -e 'end run' "${err:-ffprofile launch failed}" >/dev/null 2>&1
+        fi
         """
         let runPath = macosDir.appendingPathComponent("run")
         try script.write(to: runPath, atomically: true, encoding: .utf8)
@@ -571,7 +573,9 @@ func installServices() throws {
                         <dict>
                             <key>COMMAND_STRING</key>
                             <string>PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
-        ffprofile launch "\(shellName)"</string>
+        if ! err=$(ffprofile launch "\(shellName)" 2&gt;&amp;1); then
+            /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "ffprofile"' -e 'end run' "${err:-ffprofile launch failed}" &gt;/dev/null 2&gt;&amp;1
+        fi</string>
                             <key>CheckedForUserDefaultShell</key>
                             <true/>
                             <key>inputMethod</key>
