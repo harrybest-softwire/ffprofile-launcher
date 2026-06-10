@@ -797,13 +797,14 @@ func uninstallServices() throws {
 
 // MARK: - Main
 
-func usage() {
-    fputs("Usage:\n", stderr)
-    fputs("  ffprofile list              List available profiles\n", stderr)
-    fputs("  ffprofile launch <profile>  Launch a profile (pipe a URL to open it)\n", stderr)
-    fputs("  ffprofile install           Install Spotlight apps and Services\n", stderr)
-    fputs("  ffprofile uninstall         Remove Spotlight apps and Services\n", stderr)
-    fputs("  ffprofile version           Print the version\n", stderr)
+func usage(_ out: UnsafeMutablePointer<FILE> = stderr) {
+    fputs("Usage:\n", out)
+    fputs("  ffprofile list              List available profiles\n", out)
+    fputs("  ffprofile launch <profile>  Launch a profile (pipe a URL to open it)\n", out)
+    fputs("  ffprofile install           Install Spotlight apps and Services\n", out)
+    fputs("  ffprofile uninstall         Remove Spotlight apps and Services\n", out)
+    fputs("  ffprofile version           Print the version\n", out)
+    fputs("  ffprofile help              Show this help\n", out)
 }
 
 let args = CommandLine.arguments
@@ -909,6 +910,9 @@ case "uninstall":
         fputs("error: \(error)\n", stderr)
         exit(1)
     }
+
+case "help", "--help", "-h":
+    usage(stdout)
 
 case "version":
     print(version)
