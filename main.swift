@@ -53,6 +53,15 @@ func parseProfiles() throws -> [Profile] {
     return profiles
 }
 
+// MARK: - Output
+
+// Informational messages — only shown when a person is watching.
+func note(_ msg: String) {
+    if isatty(STDERR_FILENO) != 0 {
+        fputs(msg, stderr)
+    }
+}
+
 // MARK: - Listing
 
 func listProfiles(_ profiles: [Profile]) {
@@ -269,7 +278,7 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
         // minimized or on another Space. The profile is locked either way —
         // never start a second instance once a pid is found.
         let wc = windowCount(pid)
-        fputs("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n", stderr)
+        note("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n")
         focusProcess(pid)
         if let url = url {
             openURLViaAppleEvent(pid, url)
@@ -878,7 +887,7 @@ case "launch":
         matched = matches[0]
     }
     if method != "exact" {
-        fputs("matched \"\(matched.name)\" (\(method))\n", stderr)
+        note("matched \"\(matched.name)\" (\(method))\n")
     }
 
     var url: String? = nil
