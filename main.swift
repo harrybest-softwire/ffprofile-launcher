@@ -58,7 +58,8 @@ func parseProfiles() throws -> [Profile] {
 func listProfiles(_ profiles: [Profile]) {
     for p in profiles {
         let marker = p.isDefault ? "* " : "  "
-        print("\(marker)\(p.name)")
+        let running = findRunningProfile(p.path, name: p.name) != nil ? "  (running)" : ""
+        print("\(marker)\(p.name)\(running)")
     }
 }
 
