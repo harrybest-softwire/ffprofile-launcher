@@ -909,6 +909,28 @@ func installServices() throws {
     pbs.waitUntilExit()
 }
 
+func runInstall() throws {
+    try installHelperApp()
+    try installApps()
+    try installServices()
+    let stamp = ffprofileSupportDir().appendingPathComponent("install-stamp")
+    FileManager.default.createFile(atPath: stamp.path, contents: Data())
+}
+
+// Refresh the installed apps and Services when Firefox's profile list has
+// changed since the last install. Only runs once something was installed.
+func syncIfStale() {
+    let fm = FileManager.default
+    let ini = fm.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Firefox/profiles.ini").path
+    let stamp = ffprofileSupportDir().appendingPathComponent("install-stamp").path
+    guard let iniDate = (try? fm.attributesOfItem(atPath: ini))?[.modificationDate] as? Date,
+          let stampDate = (try? fm.attributesOfItem(atPath: stamp))?[.modificationDate] as? Date,
+          iniDate > stampDate else { return }
+    note("profile list changed, refreshing installed apps\n")
+    try? runInstall()
+}
+
 // MARK: - Uninstall
 
 func uninstallApps() throws {
@@ -1062,12 +1084,11 @@ case "launch":
 
 
     launchProfile(matched, url: url)
+    syncIfStale()
 
 case "install":
     do {
-        try installHelperApp()
-        try installApps()
-        try installServices()
+        try runInstall()
     } catch {
         fputs("error: \(error)\n", stderr)
         exit(1)

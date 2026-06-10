@@ -61,7 +61,9 @@ source ~/.local/share/bash-completion/completions/ffprofile
 
 ### Spotlight apps
 
-`ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock and invoke `ffprofile launch <name>` when opened.
+`ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock. It also installs a shared helper, `~/Applications/ffprofile.app`, which the per-profile apps and Services route through — macOS prompts once to grant Accessibility to "ffprofile", and that single grant covers window focusing for every profile.
+
+After the first install, the apps and Services refresh themselves: when Firefox's profile list changes, the next `launch` regenerates the bundles and removes ones for deleted profiles.
 
 ### Right-click Services
 
@@ -73,4 +75,4 @@ This works in Safari, Mail, and most native apps. Whether the URL or the visible
 
 - macOS
 - Firefox installed at `/Applications/Firefox.app`
-- Accessibility permissions (for window focusing via AX API)
+- Accessibility permissions for window focusing — granted once to the `ffprofile` helper app for Spotlight/Service launches, and to your terminal app for CLI use
