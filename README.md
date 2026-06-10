@@ -23,12 +23,14 @@ If the profile is already running its window is focused; otherwise a new instanc
 ## Install
 
 ```sh
-make install
+make
+sudo make install
 ```
 
-Builds and installs to `/usr/local/bin`. Override the prefix if needed, e.g. to install to `~/.local/bin`:
+Builds, then installs to `/usr/local/bin`. The install step deliberately doesn't build, so running it under `sudo` leaves no root-owned files in the working tree. Override the prefix to skip `sudo`, e.g. to install to `~/.local/bin`:
 
 ```sh
+make
 make install PREFIX=~/.local
 ```
 
