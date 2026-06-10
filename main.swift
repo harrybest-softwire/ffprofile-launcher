@@ -345,9 +345,9 @@ func generateIcon(_ name: String) -> Data? {
     let globeRect = CGRect(x: (mainSize - globeSize) / 2, y: s - mainSize + mainSize * 0.32, width: globeSize, height: globeSize)
     ctx.fillEllipse(in: globeRect)
 
-    // Initial letter
-    let initial = String(name.prefix(1)).uppercased()
-    let font = CTFontCreateWithName("Helvetica Neue Bold" as CFString, mainSize * 0.45, nil)
+    // Initials: first letter of up to the first two words
+    let initial = name.split(separator: " ").prefix(2).map { String($0.prefix(1)) }.joined().uppercased()
+    let font = CTFontCreateWithName("Helvetica Neue Bold" as CFString, mainSize * (initial.count > 1 ? 0.34 : 0.45), nil)
     let attrs: [NSAttributedString.Key: Any] = [
         .font: font,
         .foregroundColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
