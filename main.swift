@@ -234,6 +234,22 @@ func focusProcess(_ pid: pid_t) {
 
 // MARK: - Launch
 
+func ffprofileSupportDir() -> URL {
+    let dir = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/ffprofile")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+}
+
+func withProfileLock(_ profile: Profile, _ body: () -> Void) {
+    let lockPath = ffprofileSupportDir()
+        .appendingPathComponent("launch-\(profile.path.replacingOccurrences(of: "/", with: "-")).lock").path
+    let fd = open(lockPath, O_CREAT | O_WRONLY, 0o644)
+    if fd >= 0 { flock(fd, LOCK_EX) }
+    defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
+    body()
+}
+
 func openURLViaAppleEvent(_ pid: pid_t, _ url: String) {
     // Send a GURL/GURL (GetURL) Apple Event directly to the target PID.
     // This is exactly what `open -a Firefox url` does internally, but
@@ -273,29 +289,34 @@ func reopenViaAppleEvent(_ pid: pid_t) {
 }
 
 func launchProfile(_ profile: Profile, url: String? = nil) {
-    if let pid = findRunningProfile(profile.path, name: profile.name) {
-        // windowCount only sees on-screen windows, so 0 can just mean
-        // minimized or on another Space. The profile is locked either way —
-        // never start a second instance once a pid is found.
-        let wc = windowCount(pid)
-        note("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n")
-        focusProcess(pid)
-        if let url = url {
-            openURLViaAppleEvent(pid, url)
-        } else if wc == 0 {
-            reopenViaAppleEvent(pid)
+    // Serialise launches per profile: a second invocation arriving while the
+    // first is mid-launch waits, then sees the running instance and focuses
+    // it instead of starting a second instance against the profile lock.
+    withProfileLock(profile) {
+        if let pid = findRunningProfile(profile.path, name: profile.name) {
+            // windowCount only sees on-screen windows, so 0 can just mean
+            // minimized or on another Space. The profile is locked either way —
+            // never start a second instance once a pid is found.
+            let wc = windowCount(pid)
+            note("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n")
+            focusProcess(pid)
+            if let url = url {
+                openURLViaAppleEvent(pid, url)
+            } else if wc == 0 {
+                reopenViaAppleEvent(pid)
+            }
+            return
         }
-        return
-    }
 
-    let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/Applications/Firefox.app/Contents/MacOS/firefox")
-    var arguments = ["-P", profile.name, "-no-remote", "-new-window"]
-    if let url { arguments.append(url) }
-    proc.arguments = arguments
-    do { try proc.run() } catch {
-        fputs("error launching Firefox: \(error)\n", stderr)
-        exit(1)
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/Applications/Firefox.app/Contents/MacOS/firefox")
+        var arguments = ["-P", profile.name, "-no-remote", "-new-window"]
+        if let url { arguments.append(url) }
+        proc.arguments = arguments
+        do { try proc.run() } catch {
+            fputs("error launching Firefox: \(error)\n", stderr)
+            exit(1)
+        }
     }
 }
 
