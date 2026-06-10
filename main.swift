@@ -359,6 +359,15 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
         do { try proc.run() } catch {
             fail("couldn't launch Firefox: \(error)")
         }
+
+        // Hold the lock until the new instance is visible to
+        // findRunningProfile — it takes Firefox a moment to register with
+        // NSWorkspace, and a second launch released into that gap would
+        // spawn a second instance against the profile lock.
+        let deadline = Date(timeIntervalSinceNow: 5)
+        while findRunningProfile(profile.path, name: profile.name) == nil && Date() < deadline {
+            usleep(100_000)
+        }
     }
 }
 
