@@ -227,7 +227,21 @@ func windowCount(_ pid: pid_t) -> Int {
     }.count
 }
 
+// Without Accessibility permission the AX calls below silently do nothing
+// (activation still works). Trigger the system prompt the first time, per
+// TCC identity — the helper app and a terminal are separate grants.
+func ensureAXTrust() {
+    guard !AXIsProcessTrusted() else { return }
+    let context = Bundle.main.bundleIdentifier ?? "cli"
+    let marker = ffprofileSupportDir().appendingPathComponent("ax-prompted-\(context)")
+    guard !FileManager.default.fileExists(atPath: marker.path) else { return }
+    FileManager.default.createFile(atPath: marker.path, contents: nil)
+    let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: true] as CFDictionary
+    AXIsProcessTrustedWithOptions(opts)
+}
+
 func focusProcess(_ pid: pid_t) {
+    ensureAXTrust()
     let axApp = AXUIElementCreateApplication(pid)
     var windowsRef: CFTypeRef?
     let err = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
