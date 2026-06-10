@@ -3,8 +3,11 @@ BINDIR  = $(PREFIX)/bin
 ZSHDIR  = $(PREFIX)/share/zsh/site-functions
 BASHDIR = $(PREFIX)/share/bash-completion/completions
 
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo unknown)
+
 build:
-	swiftc main.swift -o ffprofile -framework Cocoa -framework ApplicationServices
+	printf 'let version = "%s"\n' "$(VERSION)" > version.swift
+	swiftc main.swift version.swift -o ffprofile -framework Cocoa -framework ApplicationServices
 
 install: build
 	install -d $(BINDIR)
@@ -22,6 +25,6 @@ uninstall:
 	rm -f $(BASHDIR)/ffprofile
 
 clean:
-	rm -f ffprofile
+	rm -f ffprofile version.swift
 
 .PHONY: build install install-completions uninstall clean

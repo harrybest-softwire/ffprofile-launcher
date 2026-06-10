@@ -21,6 +21,7 @@ _ffprofile() {
                 'launch:launch or focus a profile'
                 'install:install per-profile Spotlight apps'
                 'uninstall:remove installed Spotlight apps'
+                'version:print the version'
             )
             _describe 'command' commands
             ;;

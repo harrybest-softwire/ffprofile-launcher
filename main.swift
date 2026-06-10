@@ -764,6 +764,7 @@ func usage() {
     fputs("  ffprofile launch <profile>  Launch a profile (pipe a URL to open it)\n", stderr)
     fputs("  ffprofile install           Install Spotlight apps and Services\n", stderr)
     fputs("  ffprofile uninstall         Remove Spotlight apps and Services\n", stderr)
+    fputs("  ffprofile version           Print the version\n", stderr)
 }
 
 let args = CommandLine.arguments
@@ -853,6 +854,9 @@ case "uninstall":
         fputs("error: \(error)\n", stderr)
         exit(1)
     }
+
+case "version":
+    print(version)
 
 case "_complete":
     if let profiles = try? parseProfiles() {

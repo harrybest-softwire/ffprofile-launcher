@@ -9,6 +9,7 @@ ffprofile list              List available profiles
 ffprofile launch <profile>  Launch or focus a profile
 ffprofile install           Install per-profile apps and Services
 ffprofile uninstall         Remove installed apps and Services
+ffprofile version           Print the version
 ```
 
 `launch` accepts fuzzy input — exact, prefix, substring, and fuzzy character matches are all tried in order. Pipe a URL to open it in the launched profile:

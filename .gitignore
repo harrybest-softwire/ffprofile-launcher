@@ -1,6 +1,9 @@
 # Binary
 ffprofile
 
+# Generated at build time
+version.swift
+
 # IDE
 .idea/
 
