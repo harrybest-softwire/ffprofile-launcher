@@ -813,15 +813,31 @@ case "launch":
         exit(1)
     }
 
+    let matched: Profile
     if matches.count > 1 {
-        fputs("error: \"\(input)\" matches multiple profiles (\(method)):\n", stderr)
-        for m in matches {
-            fputs("  \(m.name)\n", stderr)
+        // Only prompt when stdin is a terminal — piped input is reserved for URLs.
+        guard isatty(STDIN_FILENO) != 0 else {
+            fputs("error: \"\(input)\" matches multiple profiles (\(method)):\n", stderr)
+            for m in matches {
+                fputs("  \(m.name)\n", stderr)
+            }
+            exit(1)
         }
-        exit(1)
+        fputs("\"\(input)\" matches multiple profiles (\(method)):\n", stderr)
+        for (i, m) in matches.enumerated() {
+            fputs("  \(i + 1)) \(m.name)\n", stderr)
+        }
+        fputs("which? ", stderr)
+        guard let line = readLine(),
+              let choice = Int(line.trimmingCharacters(in: .whitespaces)),
+              (1...matches.count).contains(choice) else {
+            fputs("error: invalid selection\n", stderr)
+            exit(1)
+        }
+        matched = matches[choice - 1]
+    } else {
+        matched = matches[0]
     }
-
-    let matched = matches[0]
     if method != "exact" {
         fputs("matched \"\(matched.name)\" (\(method))\n", stderr)
     }
