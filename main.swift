@@ -391,6 +391,28 @@ func createIcns(_ name: String, at path: URL) throws {
 
 // MARK: - Install
 
+func isFfprofileBundle(_ bundleURL: URL) -> Bool {
+    let plistURL = bundleURL.appendingPathComponent("Contents/Info.plist")
+    guard let dict = NSDictionary(contentsOf: plistURL),
+          let id = dict["CFBundleIdentifier"] as? String else { return false }
+    return id.hasPrefix("com.ffprofile.")
+}
+
+func pruneStaleBundles(in dir: URL, suffix: String, valid: Set<String>) {
+    let fm = FileManager.default
+    for entry in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
+        guard entry.hasSuffix(suffix), !valid.contains(entry) else { continue }
+        let bundle = dir.appendingPathComponent(entry)
+        guard isFfprofileBundle(bundle) else { continue }
+        do {
+            try fm.removeItem(at: bundle)
+            print("removed stale \(entry)")
+        } catch {
+            fputs("warning: couldn't remove stale \(entry): \(error)\n", stderr)
+        }
+    }
+}
+
 func installApps() throws {
     let profiles = try parseProfiles()
     let fm = FileManager.default
@@ -447,6 +469,12 @@ func installApps() throws {
 
         print("installed \(appName)")
     }
+
+    pruneStaleBundles(
+        in: appsDir,
+        suffix: " - Firefox.app",
+        valid: Set(profiles.map { "\($0.name) - Firefox.app" })
+    )
 }
 
 // MARK: - Services
@@ -721,6 +749,12 @@ func installServices() throws {
         try documentWflow.write(to: resourcesDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
         print("installed service \"\(menuName)\"")
     }
+
+    pruneStaleBundles(
+        in: servicesDir,
+        suffix: " - Firefox.workflow",
+        valid: Set(profiles.map { "\($0.name) - Firefox.workflow" })
+    )
 
     let pbs = Process()
     pbs.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
