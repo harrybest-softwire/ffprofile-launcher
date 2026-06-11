@@ -301,7 +301,7 @@ func openURLViaAppleEvent(_ pid: pid_t, _ url: String) {
     )
     event.setParam(NSAppleEventDescriptor(string: url), forKeyword: AEKeyword(keyDirectObject))
     do {
-        try event.sendEvent(options: .noReply, timeout: 30)
+        try event.sendEvent(options: .noReply, timeout: 5)
     } catch {
         fputs("warning: couldn't send URL event: \(error)\n", stderr)
     }
@@ -319,9 +319,30 @@ func reopenViaAppleEvent(_ pid: pid_t) {
         transactionID: Int32(kAnyTransactionID)
     )
     do {
-        try event.sendEvent(options: .noReply, timeout: 30)
+        try event.sendEvent(options: .noReply, timeout: 5)
     } catch {
         fputs("warning: couldn't send reopen event: \(error)\n", stderr)
+    }
+}
+
+// Open a new window by sending Cmd+N straight to the process. Uses the
+// Accessibility grant (same as focusing) rather than Apple Events, which
+// need separate Automation consent per sender and can stall undelivered.
+// Falls back to a reopen Apple Event if no window appears.
+func openNewWindow(_ pid: pid_t) {
+    let src = CGEventSource(stateID: .hidSystemState)
+    for keyDown in [true, false] {
+        // Keycode 45 = N on QWERTY layouts; the fallback covers others.
+        guard let event = CGEvent(keyboardEventSource: src, virtualKey: 45, keyDown: keyDown) else { continue }
+        event.flags = .maskCommand
+        event.postToPid(pid)
+    }
+    let deadline = Date(timeIntervalSinceNow: 2)
+    while windowCount(pid) == 0 && Date() < deadline {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    }
+    if windowCount(pid) == 0 {
+        reopenViaAppleEvent(pid)
     }
 }
 
@@ -340,7 +361,7 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
             if let url = url {
                 openURLViaAppleEvent(pid, url)
             } else if wc == 0 {
-                reopenViaAppleEvent(pid)
+                openNewWindow(pid)
             }
             return
         }
