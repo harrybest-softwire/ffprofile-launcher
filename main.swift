@@ -329,7 +329,11 @@ func reopenViaAppleEvent(_ pid: pid_t) {
 // Accessibility grant (same as focusing) rather than Apple Events, which
 // need separate Automation consent per sender and can stall undelivered.
 // Falls back to a reopen Apple Event if no window appears.
-func openNewWindow(_ pid: pid_t) {
+func openNewWindow(_ pid: pid_t, profileName: String) {
+    // Re-check after activation — focusing may have switched Spaces and
+    // revealed an existing window, in which case there's nothing to do.
+    if windowCount(pid) > 0 { return }
+
     let src = CGEventSource(stateID: .hidSystemState)
     for keyDown in [true, false] {
         // Keycode 45 = N on QWERTY layouts; the fallback covers others.
@@ -343,6 +347,14 @@ func openNewWindow(_ pid: pid_t) {
     }
     if windowCount(pid) == 0 {
         reopenViaAppleEvent(pid)
+        let retry = Date(timeIntervalSinceNow: 2)
+        while windowCount(pid) == 0 && Date() < retry {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        }
+    }
+
+    if windowCount(pid) == 0 {
+        fail("no window appeared — Firefox (pid \(pid)) for \"\(profileName)\" may be unresponsive; try force-quitting it, or check Accessibility permission for ffprofile")
     }
 }
 
@@ -361,7 +373,7 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
             if let url = url {
                 openURLViaAppleEvent(pid, url)
             } else if wc == 0 {
-                openNewWindow(pid)
+                openNewWindow(pid, profileName: profile.name)
             }
             return
         }
