@@ -358,6 +358,17 @@ func openNewWindow(_ pid: pid_t, profileName: String) {
     }
 }
 
+// Services hand us whatever text the sending app provides, which for a
+// hyperlink can be its display text rather than its URL (Slack does this).
+// Refuse anything that can't be a URL instead of guessing.
+func normalizeURL(_ text: String) -> String? {
+    if text.rangeOfCharacter(from: .whitespacesAndNewlines) != nil { return nil }
+    let candidate = text.contains("://") ? text : "https://\(text)"
+    guard let parsed = URL(string: candidate), let host = parsed.host,
+          host.contains(".") || host == "localhost" else { return nil }
+    return candidate
+}
+
 func launchProfile(_ profile: Profile, url: String? = nil) {
     // Serialise launches per profile: a second invocation arriving while the
     // first is mid-launch waits, then sees the running instance and focuses
@@ -1110,12 +1121,18 @@ case "launch":
 
     var url: String? = nil
     if let trimmed = urlArg?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty {
-        url = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let normalized = normalizeURL(trimmed) else {
+            fail("selected text isn't a URL: \"\(trimmed)\"")
+        }
+        url = normalized
     } else if isatty(STDIN_FILENO) == 0 {
         let data = FileHandle.standardInput.readDataToEndOfFile()
         let trimmed = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmed, !trimmed.isEmpty {
-            url = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+            guard let normalized = normalizeURL(trimmed) else {
+                fail("selected text isn't a URL: \"\(trimmed)\"")
+            }
+            url = normalized
         }
     }
 
