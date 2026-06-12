@@ -1,5 +1,8 @@
 # ffprofile
 
+> [!WARNING]
+> **Disclaimer:** this project is entirely vibe coded. It has had no rigorous review, comes with no guarantees of correctness or safety, and may break at any time. Use at your own risk.
+
 A macOS command-line tool for managing and launching Firefox profiles. Supports fuzzy profile matching, focusing existing windows, installing per-profile Spotlight apps with generated icons, and right-click Services for opening links in a specific profile.
 
 ## Usage
