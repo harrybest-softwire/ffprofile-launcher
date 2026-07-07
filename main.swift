@@ -997,8 +997,10 @@ func runInstall() throws {
     FileManager.default.createFile(atPath: stamp.path, contents: Data())
     print("""
     To route link clicks from other apps through ffprofile, choose ffprofile \
-    as the default browser in System Settings > Desktop & Dock. Rules live in \
-    \(ffprofileSupportDir().appendingPathComponent("routes").path)
+    as the default browser in System Settings > Desktop & Dock. Each click \
+    prompts for a profile; add rules to \
+    \(ffprofileSupportDir().appendingPathComponent("routes").path) to skip \
+    the prompt for known sites.
     """)
 }
 
@@ -1094,9 +1096,47 @@ func matchRoute(_ url: URL, rules: [Route]) -> String? {
     return nil
 }
 
+// Menu-at-cursor profile picker. popUp blocks in menu tracking until the
+// user chooses or dismisses, so this needs no window of its own.
+// NSMenuItem.target is weak — the caller's reference keeps this alive.
+final class ProfilePicker: NSObject {
+    private let profiles: [Profile]
+    private var selected: Profile?
+
+    init(_ profiles: [Profile]) {
+        self.profiles = profiles
+    }
+
+    func run() -> Profile? {
+        let menu = NSMenu(title: "ffprofile")
+        for (i, profile) in profiles.enumerated() {
+            let item = NSMenuItem(title: profile.name,
+                                  action: #selector(choose(_:)),
+                                  keyEquivalent: i < 9 ? "\(i + 1)" : "")
+            item.keyEquivalentModifierMask = []
+            item.target = self
+            item.tag = i
+            menu.addItem(item)
+        }
+        // Activate so the menu gets keyboard focus, not just mouse tracking.
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        return selected
+    }
+
+    @objc private func choose(_ sender: NSMenuItem) {
+        selected = profiles[sender.tag]
+    }
+}
+
 // Route a link click delivered by Launch Services (ffprofile set as the
-// default browser): first matching rule in the routes file, falling back to
-// the profiles.ini default profile.
+// default browser): first matching rule in the routes file, otherwise ask
+// with a picker menu at the mouse cursor. Dismissing the picker drops the
+// link without opening anything.
 func routeIncomingURL(_ url: URL) {
     let profiles: [Profile]
     do { profiles = try parseProfiles() } catch {
@@ -1112,10 +1152,12 @@ func routeIncomingURL(_ url: URL) {
                 : "routes file entry \"\(name)\" matches multiple profiles")
         }
         target = matches[0]
-    } else if let iniDefault = profiles.first(where: { $0.isDefault }) {
-        target = iniDefault
     } else {
-        fail("no route for \(url.host ?? url.absoluteString) and no default profile")
+        // Bind the picker to a local: NSMenuItem.target is weak, so an
+        // unnamed temporary would be deallocated before the menu opens.
+        let picker = ProfilePicker(profiles)
+        guard let picked = picker.run() else { return }
+        target = picked
     }
     launchProfile(target, url: url.absoluteString)
 }

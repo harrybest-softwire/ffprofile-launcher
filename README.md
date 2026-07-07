@@ -78,18 +78,18 @@ This works in Safari, Mail, and most native apps. Whether the URL or the visible
 
 ### Routing link clicks (default browser)
 
-The helper app registers as an http/https handler, so it can be chosen as the default browser in System Settings → Desktop & Dock. Links clicked in other apps are then routed to a profile by `~/Library/Application Support/ffprofile/routes`, instead of landing in whichever Firefox instance happened to start first.
+The helper app registers as an http/https handler, so it can be chosen as the default browser in System Settings → Desktop & Dock. Links clicked in other apps then open a profile picker menu at the mouse cursor — click a profile (or press 1–9) and the link opens there, instead of landing in whichever Firefox instance happened to start first. Pressing Escape or clicking away drops the link.
 
-One rule per line: profile name first, URL pattern last. Patterns are shell globs matched against the URL's host, or host+path when the pattern contains a `/`. The first matching rule wins, so end with a catch-all to set a fallback:
+To skip the prompt for sites you've decided on, add rules to `~/Library/Application Support/ffprofile/routes` — one per line, profile name first, URL pattern last. Patterns are shell globs matched against the URL's host, or host+path when the pattern contains a `/`. The first matching rule wins, and links matching no rule fall back to the picker:
 
 ```
 # ~/Library/Application Support/ffprofile/routes
 work      *.atlassian.net
 work      github.com/softwire/*
-personal  *
+personal  *.youtube.com
 ```
 
-Note that `*.atlassian.net` matches subdomains only — add a separate `atlassian.net` rule for the bare domain. Without a routes file, or when no rule matches, the profiles.ini default profile is used.
+Note that `*.atlassian.net` matches subdomains only — add a separate `atlassian.net` rule for the bare domain.
 
 ## Requirements
 
