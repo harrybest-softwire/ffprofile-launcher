@@ -16,17 +16,15 @@ class Ffprofile < Formula
     bash_completion.install "completions/bash/ffprofile"
   end
 
-  # Set up the Spotlight apps and helper on install and refresh them on
-  # upgrade, so a new helper binary ships without a manual step.
-  def post_install
-    system bin/"ffprofile", "install"
-  end
-
+  # No post_install: brew's post-install sandbox can't touch ~/Applications
+  # (it even denies reading $HOME), so the binary refreshes the installed
+  # apps itself on first use after an upgrade (syncIfUpgraded).
   def caveats
     <<~EOS
-      The Spotlight apps and link-picker helper in ~/Applications are set up
-      automatically on install and upgrade. To route link clicks through the
-      picker, choose ffprofile as the default browser in
+      Run `ffprofile install` once to set up the Spotlight apps and
+      link-picker helper in ~/Applications; after upgrades they refresh
+      themselves on first use. To route link clicks through the picker,
+      choose ffprofile as the default browser in
       System Settings > Desktop & Dock.
 
       Before `brew uninstall`, run `ffprofile uninstall` to remove the
