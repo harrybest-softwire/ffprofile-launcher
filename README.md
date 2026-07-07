@@ -35,7 +35,7 @@ brew trust harrybest-softwire/ffprofile-launcher   # newer Homebrew versions onl
 brew install ffprofile
 ```
 
-Shell completions are installed automatically. Then run `ffprofile install` to set up the Spotlight apps, Services, and link routing. Before `brew uninstall`, run `ffprofile uninstall` to remove those — Homebrew doesn't track them.
+Shell completions, the Spotlight apps, and the link-picker helper are all set up automatically on install and upgrade. Before `brew uninstall`, run `ffprofile uninstall` to remove the installed apps — Homebrew doesn't track them.
 
 ### From source
 
