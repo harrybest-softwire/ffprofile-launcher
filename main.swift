@@ -566,12 +566,44 @@ func installHelperApp() throws {
         <string>AppIcon</string>
         <key>LSUIElement</key>
         <true/>
+        <key>CFBundleURLTypes</key>
+        <array>
+            <dict>
+                <key>CFBundleURLName</key>
+                <string>Web URL</string>
+                <key>CFBundleURLSchemes</key>
+                <array>
+                    <string>http</string>
+                    <string>https</string>
+                </array>
+            </dict>
+        </array>
+        <key>CFBundleDocumentTypes</key>
+        <array>
+            <dict>
+                <key>CFBundleTypeName</key>
+                <string>HTML document</string>
+                <key>CFBundleTypeRole</key>
+                <string>Viewer</string>
+                <key>LSItemContentTypes</key>
+                <array>
+                    <string>public.html</string>
+                </array>
+            </dict>
+        </array>
     </dict>
     </plist>
     """
     let plistPath = contentsDir.appendingPathComponent("Info.plist")
     if (try? String(contentsOf: plistPath, encoding: .utf8)) != plist {
         try plist.write(to: plistPath, atomically: true, encoding: .utf8)
+        // Re-register with Launch Services so the http/https claims (and the
+        // System Settings default-browser listing) pick up the new plist.
+        let lsregister = Process()
+        lsregister.executableURL = URL(fileURLWithPath: "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+        lsregister.arguments = ["-f", appDir.path]
+        try? lsregister.run()
+        lsregister.waitUntilExit()
     }
 
     // Only replace the embedded binary when the build actually changed —
@@ -963,6 +995,11 @@ func runInstall() throws {
     try installServices()
     let stamp = ffprofileSupportDir().appendingPathComponent("install-stamp")
     FileManager.default.createFile(atPath: stamp.path, contents: Data())
+    print("""
+    To route link clicks from other apps through ffprofile, choose ffprofile \
+    as the default browser in System Settings > Desktop & Dock. Rules live in \
+    \(ffprofileSupportDir().appendingPathComponent("routes").path)
+    """)
 }
 
 // Refresh the installed apps and Services when Firefox's profile list has
@@ -1017,6 +1054,107 @@ func uninstallServices() throws {
     }
 }
 
+// MARK: - URL routing
+
+struct Route {
+    let profileName: String
+    let pattern: String
+}
+
+// Routes file: one rule per line, profile name first, URL pattern last,
+// e.g. `work *.atlassian.net`. Patterns are shell globs matched against the
+// URL's host, or host+path when the pattern contains a "/". First matching
+// rule wins, so a final catch-all like `personal *` sets the fallback.
+func parseRoutes() -> [Route] {
+    let path = ffprofileSupportDir().appendingPathComponent("routes").path
+    guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+        return []
+    }
+    var rules: [Route] = []
+    for line in contents.components(separatedBy: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+        let tokens = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard tokens.count >= 2 else { continue }
+        rules.append(Route(profileName: tokens.dropLast().joined(separator: " "),
+                           pattern: tokens[tokens.count - 1]))
+    }
+    return rules
+}
+
+func matchRoute(_ url: URL, rules: [Route]) -> String? {
+    guard let host = url.host else { return nil }
+    let hostAndPath = host + url.path
+    for rule in rules {
+        let target = rule.pattern.contains("/") ? hostAndPath : host
+        if fnmatch(rule.pattern.lowercased(), target.lowercased(), 0) == 0 {
+            return rule.profileName
+        }
+    }
+    return nil
+}
+
+// Route a link click delivered by Launch Services (ffprofile set as the
+// default browser): first matching rule in the routes file, falling back to
+// the profiles.ini default profile.
+func routeIncomingURL(_ url: URL) {
+    let profiles: [Profile]
+    do { profiles = try parseProfiles() } catch {
+        fail("\(error)")
+    }
+
+    let target: Profile
+    if let name = matchRoute(url, rules: parseRoutes()) {
+        let (matches, _) = matchProfile(profiles, name)
+        guard matches.count == 1 else {
+            fail(matches.isEmpty
+                ? "routes file names unknown profile \"\(name)\""
+                : "routes file entry \"\(name)\" matches multiple profiles")
+        }
+        target = matches[0]
+    } else if let iniDefault = profiles.first(where: { $0.isDefault }) {
+        target = iniDefault
+    } else {
+        fail("no route for \(url.host ?? url.absoluteString) and no default profile")
+    }
+    launchProfile(target, url: url.absoluteString)
+}
+
+final class URLRouterDelegate: NSObject, NSApplicationDelegate {
+    // Cancelled the moment a URL arrives, so a slow profile launch (cold
+    // starts hold launchProfile for several seconds) isn't cut short.
+    var idleTimeout: DispatchWorkItem?
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        idleTimeout?.cancel()
+        for url in urls {
+            routeIncomingURL(url)
+        }
+        syncIfStale()
+        exit(0)
+    }
+}
+
+// Launched by Launch Services with no arguments — i.e. as the default
+// browser handling a link click. Run a minimal app loop just long enough to
+// receive the URL; AppKit turns the GetURL Apple Event into
+// application(_:open:) because the plist declares the http/https schemes.
+func runURLHandlerMode() -> Never {
+    let app = NSApplication.shared
+    let delegate = URLRouterDelegate()
+    app.delegate = delegate
+    // No URL means we were opened directly (Finder, bare `open -a`) —
+    // explain what this app is for instead of lingering invisibly.
+    let timeout = DispatchWorkItem {
+        notify("Set ffprofile as your default browser to route links between profiles")
+        exit(0)
+    }
+    delegate.idleTimeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: timeout)
+    app.run()
+    exit(0)
+}
+
 // MARK: - Main
 
 func usage(_ out: UnsafeMutablePointer<FILE> = stderr) {
@@ -1032,6 +1170,12 @@ func usage(_ out: UnsafeMutablePointer<FILE> = stderr) {
 let args = CommandLine.arguments
 
 guard args.count >= 2 else {
+    // No CLI arguments and running as the helper bundle: launched by Launch
+    // Services, e.g. as the default browser handling a link click. The bare
+    // CLI binary has no bundle identifier and still falls through to usage.
+    if Bundle.main.bundleIdentifier == "com.ffprofile.helper" {
+        runURLHandlerMode()
+    }
     usage()
     exit(1)
 }
