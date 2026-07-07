@@ -706,9 +706,7 @@ func runInstall() throws {
     print("""
     To route link clicks from other apps through ffprofile, choose ffprofile \
     as the default browser in System Settings > Desktop & Dock. Each click \
-    prompts for a profile; add rules to \
-    \(ffprofileSupportDir().appendingPathComponent("routes").path) to skip \
-    the prompt for known sites.
+    prompts for a profile.
     """)
 }
 
@@ -751,44 +749,6 @@ func uninstallApps() throws {
 
 // MARK: - URL routing
 
-struct Route {
-    let profileName: String
-    let pattern: String
-}
-
-// Routes file: one rule per line, profile name first, URL pattern last,
-// e.g. `work *.atlassian.net`. Patterns are shell globs matched against the
-// URL's host, or host+path when the pattern contains a "/". First matching
-// rule wins, so a final catch-all like `personal *` sets the fallback.
-func parseRoutes() -> [Route] {
-    let path = ffprofileSupportDir().appendingPathComponent("routes").path
-    guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
-        return []
-    }
-    var rules: [Route] = []
-    for line in contents.components(separatedBy: "\n") {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
-        let tokens = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard tokens.count >= 2 else { continue }
-        rules.append(Route(profileName: tokens.dropLast().joined(separator: " "),
-                           pattern: tokens[tokens.count - 1]))
-    }
-    return rules
-}
-
-func matchRoute(_ url: URL, rules: [Route]) -> String? {
-    guard let host = url.host else { return nil }
-    let hostAndPath = host + url.path
-    for rule in rules {
-        let target = rule.pattern.contains("/") ? hostAndPath : host
-        if fnmatch(rule.pattern.lowercased(), target.lowercased(), 0) == 0 {
-            return rule.profileName
-        }
-    }
-    return nil
-}
-
 // Menu-at-cursor profile picker. popUp blocks in menu tracking until the
 // user chooses or dismisses, so this needs no window of its own.
 // NSMenuItem.target is weak — the caller's reference keeps this alive.
@@ -827,32 +787,19 @@ final class ProfilePicker: NSObject {
 }
 
 // Route a link click delivered by Launch Services (ffprofile set as the
-// default browser): first matching rule in the routes file, otherwise ask
-// with a picker menu at the mouse cursor. Dismissing the picker drops the
-// link without opening anything.
+// default browser): ask which profile with a picker menu at the mouse
+// cursor. Dismissing the picker drops the link without opening anything.
 func routeIncomingURL(_ url: URL) {
     let profiles: [Profile]
     do { profiles = try parseProfiles() } catch {
         fail("\(error)")
     }
 
-    let target: Profile
-    if let name = matchRoute(url, rules: parseRoutes()) {
-        let (matches, _) = matchProfile(profiles, name)
-        guard matches.count == 1 else {
-            fail(matches.isEmpty
-                ? "routes file names unknown profile \"\(name)\""
-                : "routes file entry \"\(name)\" matches multiple profiles")
-        }
-        target = matches[0]
-    } else {
-        // Bind the picker to a local: NSMenuItem.target is weak, so an
-        // unnamed temporary would be deallocated before the menu opens.
-        let picker = ProfilePicker(profiles)
-        guard let picked = picker.run() else { return }
-        target = picked
-    }
-    launchProfile(target, url: url.absoluteString)
+    // Bind the picker to a local: NSMenuItem.target is weak, so an
+    // unnamed temporary would be deallocated before the menu opens.
+    let picker = ProfilePicker(profiles)
+    guard let picked = picker.run() else { return }
+    launchProfile(picked, url: url.absoluteString)
 }
 
 final class URLRouterDelegate: NSObject, NSApplicationDelegate {
