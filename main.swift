@@ -698,16 +698,53 @@ func installApps() throws {
     )
 }
 
+// Offer to take over link clicks. setDefaultApplication shows the system's
+// own confirmation dialog, so nothing changes unless the user approves
+// there. Only offer when a person ran `install` at a terminal — automatic
+// reinstalls (syncIfStale, syncIfUpgraded) must never pop dialogs.
+func offerDefaultBrowser() {
+    let helperApp = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Applications/ffprofile.app")
+    if let current = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!),
+       current.resolvingSymlinksInPath() == helperApp.resolvingSymlinksInPath() {
+        return  // already the default browser
+    }
+
+    let settingsHint = """
+    To route link clicks from other apps through ffprofile, choose ffprofile \
+    as the default browser in System Settings > Desktop & Dock. Each click \
+    prompts for a profile.
+    """
+    guard isatty(STDIN_FILENO) != 0, #available(macOS 12.0, *) else {
+        print(settingsHint)
+        return
+    }
+
+    print("Choose ffprofile in the dialog to route link clicks through the profile picker.")
+    var done = false
+    var accepted = false
+    NSWorkspace.shared.setDefaultApplication(at: helperApp, toOpenURLsWithScheme: "http") { error in
+        accepted = error == nil
+        done = true
+    }
+    let deadline = Date(timeIntervalSinceNow: 120)
+    while !done && Date() < deadline {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    }
+    if accepted {
+        print("ffprofile is now the default browser; link clicks prompt for a profile.")
+    } else {
+        // Declining the dialog lands here too — not an install failure.
+        print(settingsHint)
+    }
+}
+
 func runInstall() throws {
     try installHelperApp()
     try installApps()
     let stamp = ffprofileSupportDir().appendingPathComponent("install-stamp")
     FileManager.default.createFile(atPath: stamp.path, contents: Data())
-    print("""
-    To route link clicks from other apps through ffprofile, choose ffprofile \
-    as the default browser in System Settings > Desktop & Dock. Each click \
-    prompts for a profile.
-    """)
+    offerDefaultBrowser()
 }
 
 // The Homebrew-linked binary, if this machine has one. The opt path is

@@ -86,7 +86,9 @@ After the first install, the apps and Services refresh themselves: when Firefox'
 
 ### Routing link clicks (default browser)
 
-The helper app registers as an http/https handler, so it can be chosen as the default browser in System Settings → Desktop & Dock. Links clicked in other apps then open a profile picker menu at the mouse cursor — click a profile (or press 1–9) and the link opens there, instead of landing in whichever Firefox instance happened to start first. Pressing Escape or clicking away drops the link.
+`ffprofile install` offers to make ffprofile the default browser — macOS shows its standard confirmation dialog, and nothing changes unless you approve it there. (To do it later or by hand: the helper registers as an http/https handler, so it appears in System Settings → Desktop & Dock → Default web browser.)
+
+Links clicked in other apps then open a profile picker menu at the mouse cursor — click a profile (or press 1–9) and the link opens there, instead of landing in whichever Firefox instance happened to start first. Pressing Escape or clicking away drops the link.
 
 ## Requirements
 

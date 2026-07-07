@@ -23,9 +23,9 @@ class Ffprofile < Formula
     <<~EOS
       Run `ffprofile install` once to set up the Spotlight apps and
       link-picker helper in ~/Applications; after upgrades they refresh
-      themselves on first use. To route link clicks through the picker,
-      choose ffprofile as the default browser in
-      System Settings > Desktop & Dock.
+      themselves on first use. It also offers to make ffprofile the default
+      browser (macOS asks for confirmation), which routes every link click
+      through the profile picker.
 
       Before `brew uninstall`, run `ffprofile uninstall` to remove the
       installed apps — Homebrew doesn't track them.
