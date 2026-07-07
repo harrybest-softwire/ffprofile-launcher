@@ -1,6 +1,6 @@
 # ffprofile
 
-A macOS command-line tool (Swift, single `main.swift`) for managing and launching Firefox profiles: fuzzy profile matching, window focusing via Accessibility, per-profile Spotlight apps, and right-click Services for opening links in a specific profile.
+A macOS command-line tool (Swift, single `main.swift`) for managing and launching Firefox profiles: fuzzy profile matching, window focusing via Accessibility, per-profile Spotlight apps, and a default-browser profile picker for opening links in a specific profile.
 
 ## Build and test
 
@@ -10,7 +10,7 @@ make          # builds ./ffprofile (swiftc, no package manager)
 
 There is no test suite. Verify changes by running the binary directly, e.g. `./ffprofile list`, or `./ffprofile launch <profile> --url <url>`. Invalid-URL cases exit before launching anything, so they're safe to test against a real profile.
 
-Installed artifacts live outside the repo: `~/Applications/ffprofile.app` (shared helper the apps and Services route through), `~/Applications/<profile> - Firefox.app`, and `~/Library/Services/*.workflow`. After changing launch behaviour, run `./ffprofile install` — the Services call the installed helper, not the repo binary, so fixes aren't live until then. Replacing the helper binary can invalidate its Accessibility grant.
+Installed artifacts live outside the repo: `~/Applications/ffprofile.app` (shared helper the apps and link clicks route through) and `~/Applications/<profile> - Firefox.app`. After changing launch behaviour, run `./ffprofile install` — link clicks go to the installed helper, not the repo binary, so fixes aren't live until then. Replacing the helper binary can invalidate its Accessibility grant.
 
 ## Commits
 
@@ -24,6 +24,6 @@ Users install through the Homebrew formula in `Formula/ffprofile.rb` (this repo 
 
 ## Gotchas
 
-- macOS Services hand over whatever text the sending app provides — for hyperlinks that can be the display text, not the href (Slack does this). `normalizeURL` in main.swift rejects non-URL text; don't reintroduce guessing.
+- Link text piped to `launch` can be a hyperlink's display text, not the href (Slack does this). `normalizeURL` in main.swift rejects non-URL text; don't reintroduce guessing.
 - Apple Events to Firefox need per-sender Automation consent and can stall; window focusing and Cmd+N go through Accessibility instead. Keep new window/focus logic on that path.
 - The helper must never replace its own binary while running as the helper (see `installHelperApp`).

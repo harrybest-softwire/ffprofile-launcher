@@ -3,15 +3,15 @@
 > [!WARNING]
 > **Disclaimer:** this project is entirely vibe coded. It has had no rigorous review, comes with no guarantees of correctness or safety, and may break at any time. Use at your own risk.
 
-A macOS command-line tool for managing and launching Firefox profiles. Supports fuzzy profile matching, focusing existing windows, installing per-profile Spotlight apps with generated icons, and right-click Services for opening links in a specific profile.
+A macOS command-line tool for managing and launching Firefox profiles. Supports fuzzy profile matching, focusing existing windows, installing per-profile Spotlight apps with generated icons, and a default-browser profile picker for opening links in a specific profile.
 
 ## Usage
 
 ```
 ffprofile list              List available profiles
 ffprofile launch <profile>  Launch or focus a profile
-ffprofile install           Install per-profile apps and Services
-ffprofile uninstall         Remove installed apps and Services
+ffprofile install           Install per-profile apps
+ffprofile uninstall         Remove installed apps
 ffprofile version           Print the version
 ```
 
@@ -80,15 +80,9 @@ source ~/.local/share/bash-completion/completions/ffprofile
 
 ### Spotlight apps
 
-`ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock. It also installs a shared helper, `~/Applications/ffprofile.app`, which the per-profile apps and Services route through — macOS prompts once to grant Accessibility to "ffprofile", and that single grant covers window focusing for every profile.
+`ffprofile install` creates a `.app` bundle in `~/Applications` for each Firefox profile, each with a generated icon. These show up in Spotlight and the Dock. It also installs a shared helper, `~/Applications/ffprofile.app`, which the per-profile apps and link clicks route through — macOS prompts once to grant Accessibility to "ffprofile", and that single grant covers window focusing for every profile.
 
 After the first install, the apps and Services refresh themselves: when Firefox's profile list changes, the next `launch` regenerates the bundles and removes ones for deleted profiles.
-
-### Right-click Services
-
-`ffprofile install` also installs a macOS Service for each profile into `~/Library/Services`. When text is selected (e.g. a URL), right-clicking shows "Open in ProfileName - Firefox" entries under the Services submenu. The selected text is piped to `ffprofile launch` as a URL.
-
-This works in Safari, Mail, and most native apps. Whether the URL or the visible link text is passed depends on the app — most pass the URL when right-clicking a hyperlink.
 
 ### Routing link clicks (default browser)
 
