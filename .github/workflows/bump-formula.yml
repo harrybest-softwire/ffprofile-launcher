@@ -1,0 +1,31 @@
+name: Bump Homebrew formula
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Point the formula at ${{ github.ref_name }}
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz"
+          sha=$(curl --fail --silent --location "$url" | sha256sum | cut -d' ' -f1)
+          sed -i "s|^  url \".*\"$|  url \"$url\"|" Formula/ffprofile.rb
+          sed -i "s|^  sha256 \".*\"$|  sha256 \"$sha\"|" Formula/ffprofile.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ffprofile.rb
+          if git diff --cached --quiet; then
+            echo "formula already up to date"
+          else
+            git commit -m "Update Homebrew formula for $GITHUB_REF_NAME"
+            git push origin main
+          fi

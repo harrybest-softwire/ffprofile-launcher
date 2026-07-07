@@ -18,6 +18,10 @@ Installed artifacts live outside the repo: `~/Applications/ffprofile.app` (share
 - Subject line only, no description body (the co-author trailer is the one exception).
 - Imperative, sentence-case subjects with no conventional-commit prefix, matching `git log`.
 
+## Releases
+
+Users install through the Homebrew formula in `Formula/ffprofile.rb` (this repo is the tap), which points at a tagged tarball. To release: `git tag vX.Y.Z && git push origin vX.Y.Z` — the bump-formula workflow then updates the formula's url/sha256 with a commit to main. Never edit those two lines by hand; pull after the workflow runs.
+
 ## Gotchas
 
 - macOS Services hand over whatever text the sending app provides — for hyperlinks that can be the display text, not the href (Slack does this). `normalizeURL` in main.swift rejects non-URL text; don't reintroduce guessing.
