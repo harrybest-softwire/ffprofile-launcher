@@ -10,7 +10,7 @@ make          # builds ./ffprofile (swiftc, no package manager)
 
 There is no test suite. Verify changes by running the binary directly, e.g. `./ffprofile list`, or `./ffprofile launch <profile> --url <url>`. Invalid-URL cases exit before launching anything, so they're safe to test against a real profile.
 
-Installed artifacts live outside the repo: `~/Applications/ffprofile.app` (shared helper the apps and link clicks route through) and `~/Applications/<profile> - Firefox.app`. After changing launch behaviour, run `./ffprofile install` — link clicks go to the installed helper, not the repo binary, so fixes aren't live until then. Replacing the helper binary can invalidate its Accessibility grant.
+Installed artifacts live outside the repo: `~/Applications/ffprofile.app` (shared helper the apps and link clicks route through) and `~/Applications/<profile> - Firefox.app`. Link clicks go to the installed helper, not the repo binary, so launch-behaviour changes aren't live until shipped. The binary on this machine is Homebrew-managed — never run `./ffprofile install` or `make install` from a repo build. To ship: cut a release (below), then `brew upgrade ffprofile && ffprofile install`. Replacing the helper binary can invalidate its Accessibility grant.
 
 ## Commits
 
