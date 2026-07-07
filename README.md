@@ -25,6 +25,20 @@ If the profile is already running its window is focused; otherwise a new instanc
 
 ## Install
 
+### Homebrew
+
+The repo doubles as a Homebrew tap:
+
+```sh
+brew tap harrybest-softwire/ffprofile-launcher https://github.com/harrybest-softwire/ffprofile-launcher
+brew trust harrybest-softwire/ffprofile-launcher   # newer Homebrew versions only
+brew install ffprofile
+```
+
+Shell completions are installed automatically. Then run `ffprofile install` to set up the Spotlight apps, Services, and link routing. Before `brew uninstall`, run `ffprofile uninstall` to remove those — Homebrew doesn't track them.
+
+### From source
+
 ```sh
 make
 sudo make install
