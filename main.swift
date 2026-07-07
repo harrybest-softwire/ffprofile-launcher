@@ -710,7 +710,39 @@ func runInstall() throws {
     """)
 }
 
-// Refresh the installed apps and Services when Firefox's profile list has
+// The Homebrew-linked binary, if this machine has one. The opt path is
+// stable across versions (Apple Silicon and Intel prefixes).
+func brewBinary() -> URL? {
+    for path in ["/opt/homebrew/opt/ffprofile/bin/ffprofile",
+                 "/usr/local/opt/ffprofile/bin/ffprofile"] {
+        if FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+    }
+    return nil
+}
+
+// Homebrew's post-install sandbox can't write to ~/Applications, so a brew
+// upgrade can't refresh the installed helper and apps itself. Instead,
+// notice on use that brew has delivered a new binary and have that binary
+// reinstall — never this one, which may be the helper (must not replace
+// itself, see installHelperApp) or a dev build (must not clobber the brew
+// install).
+func syncIfUpgraded() {
+    let fm = FileManager.default
+    guard let brew = brewBinary() else { return }
+    let helper = fm.homeDirectoryForCurrentUser
+        .appendingPathComponent("Applications/ffprofile.app/Contents/MacOS/ffprofile")
+    guard fm.fileExists(atPath: helper.path),
+          !fm.contentsEqual(atPath: brew.path, andPath: helper.path) else { return }
+    note("Homebrew delivered a new ffprofile, refreshing installed apps\n")
+    let proc = Process()
+    proc.executableURL = brew
+    proc.arguments = ["install"]
+    try? proc.run()
+}
+
+// Refresh the installed apps when Firefox's profile list has
 // changed since the last install. Only runs once something was installed.
 func syncIfStale() {
     let fm = FileManager.default
@@ -813,6 +845,7 @@ final class URLRouterDelegate: NSObject, NSApplicationDelegate {
             routeIncomingURL(url)
         }
         syncIfStale()
+        syncIfUpgraded()
         exit(0)
     }
 }
@@ -964,6 +997,7 @@ case "launch":
 
     launchProfile(matched, url: url)
     syncIfStale()
+    syncIfUpgraded()
 
 case "install":
     do {
