@@ -219,8 +219,11 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
 
 // MARK: - Focus
 
+// Counts windows across every Space, not just the active one: .optionOnScreenOnly
+// reports 0 for a window parked on another desktop, which would send us off
+// opening a new window instead of focusing the one that already exists.
 func windowCount(_ pid: pid_t) -> Int {
-    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return 0 }
+    guard let list = CGWindowListCopyWindowInfo([], kCGNullWindowID) as? [[String: Any]] else { return 0 }
     return list.filter {
         ($0[kCGWindowOwnerPID as String] as? Int32) == pid
             && ($0[kCGWindowLayer as String] as? Int) == 0
@@ -330,7 +333,7 @@ func reopenViaAppleEvent(_ pid: pid_t) {
 // need separate Automation consent per sender and can stall undelivered.
 // Falls back to a reopen Apple Event if no window appears.
 func openNewWindow(_ pid: pid_t, profileName: String) {
-    // Re-check after activation — focusing may have switched Spaces and
+    // Re-check after activation — focusing may have un-minimized or otherwise
     // revealed an existing window, in which case there's nothing to do.
     if windowCount(pid) > 0 { return }
 
@@ -374,9 +377,10 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
     // it instead of starting a second instance against the profile lock.
     withProfileLock(profile) {
         if let pid = findRunningProfile(profile.path, name: profile.name) {
-            // windowCount only sees on-screen windows, so 0 can just mean
-            // minimized or on another Space. The profile is locked either way —
-            // never start a second instance once a pid is found.
+            // A window on another Space or minimized still counts here, so
+            // focusProcess gets to raise it — macOS switches desktop to follow.
+            // The profile is locked either way — never start a second instance
+            // once a pid is found.
             let wc = windowCount(pid)
             note("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n")
             focusProcess(pid)
