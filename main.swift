@@ -219,15 +219,34 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
 
 // MARK: - Focus
 
-// Counts windows across every Space, not just the active one: .optionOnScreenOnly
-// reports 0 for a window parked on another desktop, which would send us off
-// opening a new window instead of focusing the one that already exists.
-func windowCount(_ pid: pid_t) -> Int {
-    guard let list = CGWindowListCopyWindowInfo([], kCGNullWindowID) as? [[String: Any]] else { return 0 }
+// Every Firefox instance owns a handful of surfaces that aren't browser
+// windows — full-width 30px strips, a 64×64, a 0×0 — so anything smaller than
+// a window Firefox would let you make is ignored. Without this an instance
+// with no real window still counts as having several, and never gets the
+// Cmd+N fallback below.
+private func browserWindows(_ pid: pid_t, options: CGWindowListOption) -> Int {
+    guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return 0 }
     return list.filter {
-        ($0[kCGWindowOwnerPID as String] as? Int32) == pid
-            && ($0[kCGWindowLayer as String] as? Int) == 0
+        guard ($0[kCGWindowOwnerPID as String] as? Int32) == pid,
+              ($0[kCGWindowLayer as String] as? Int) == 0,
+              let bounds = $0[kCGWindowBounds as String] as? [String: Any],
+              let width = bounds["Width"] as? Double, let height = bounds["Height"] as? Double
+        else { return false }
+        return width >= 200 && height >= 200
     }.count
+}
+
+// Windows on every Space, not just the active one: .optionOnScreenOnly reports
+// 0 for a window parked on another desktop, which would send us off opening a
+// new window instead of focusing the one that already exists.
+func windowCount(_ pid: pid_t) -> Int {
+    browserWindows(pid, options: [])
+}
+
+// Windows on the desktop the user is looking at. Pair it with windowCount to
+// tell "no windows at all" apart from "windows, but on another desktop".
+func onScreenWindowCount(_ pid: pid_t) -> Int {
+    browserWindows(pid, options: [.optionOnScreenOnly])
 }
 
 // Without Accessibility permission the AX calls below silently do nothing
@@ -270,6 +289,22 @@ func focusProcess(_ pid: pid_t) {
             RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
         } while !app.isActive && Date() < deadline
     }
+}
+
+// Activation makes Firefox frontmost without necessarily following a window to
+// its own desktop, and Firefox exposes no AX windows for a window on another
+// desktop, so there's nothing left to raise. Say where the window went rather
+// than silently leaving a frontmost app with nothing visible.
+func warnIfOffDesktop(_ pid: pid_t, profileName: String) {
+    // Activation is asynchronous, so give the desktop a moment to change.
+    let deadline = Date(timeIntervalSinceNow: 1.0)
+    repeat {
+        if onScreenWindowCount(pid) > 0 { return }
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    } while Date() < deadline
+    guard onScreenWindowCount(pid) == 0 else { return }
+
+    fail("\"\(profileName)\" is already open on another desktop — macOS didn't switch to it")
 }
 
 // MARK: - Launch
@@ -377,10 +412,9 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
     // it instead of starting a second instance against the profile lock.
     withProfileLock(profile) {
         if let pid = findRunningProfile(profile.path, name: profile.name) {
-            // A window on another Space or minimized still counts here, so
-            // focusProcess gets to raise it — macOS switches desktop to follow.
-            // The profile is locked either way — never start a second instance
-            // once a pid is found.
+            // A window on another Space or minimized still counts here, so we
+            // focus rather than opening a second one. The profile is locked
+            // either way — never start a second instance once a pid is found.
             let wc = windowCount(pid)
             note("profile \"\(profile.name)\" running (pid \(pid)), \(wc) windows\n")
             focusProcess(pid)
@@ -388,7 +422,9 @@ func launchProfile(_ profile: Profile, url: String? = nil) {
                 openURLViaAppleEvent(pid, url)
             } else if wc == 0 {
                 openNewWindow(pid, profileName: profile.name)
+                return
             }
+            warnIfOffDesktop(pid, profileName: profile.name)
             return
         }
 
