@@ -1,8 +1,8 @@
 class Ffprofile < Formula
   desc "Manage and launch Firefox profiles on macOS"
   homepage "https://github.com/harrybest-softwire/ffprofile-launcher"
-  url "https://github.com/harrybest-softwire/ffprofile-launcher/archive/refs/tags/v0.3.2.tar.gz"
-  sha256 "ec9e299b03ce7914f86e980f3b175983f78082440d6fcb53915491dfc90b5e34"
+  url "https://github.com/harrybest-softwire/ffprofile-launcher/archive/refs/tags/v0.3.3.tar.gz"
+  sha256 "4462a616ef27c387344518bcd529d0033870038099cdb12feeb3afee4e454e40"
   license "MIT"
 
   depends_on :macos
