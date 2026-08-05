@@ -220,10 +220,11 @@ func findRunningProfile(_ profilePath: String, name profileName: String) -> pid_
 // MARK: - Focus
 
 // Every Firefox instance owns a handful of surfaces that aren't browser
-// windows — full-width 30px strips, a 64×64, a 0×0 — so anything smaller than
-// a window Firefox would let you make is ignored. Without this an instance
-// with no real window still counts as having several, and never gets the
-// Cmd+N fallback below.
+// windows — full-width 30px strips, a 0×0, and a 500×500 parked at the bottom
+// left — present even when the instance has no browser window at all. A real
+// window is bigger than that 500×500 on at least one side, so require that as
+// well as a plausible size. Without it an instance with no real window still
+// counts as having one, and never gets the Cmd+N fallback below.
 private func browserWindows(_ pid: pid_t, options: CGWindowListOption) -> Int {
     guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return 0 }
     return list.filter {
@@ -232,7 +233,7 @@ private func browserWindows(_ pid: pid_t, options: CGWindowListOption) -> Int {
               let bounds = $0[kCGWindowBounds as String] as? [String: Any],
               let width = bounds["Width"] as? Double, let height = bounds["Height"] as? Double
         else { return false }
-        return width >= 200 && height >= 200
+        return (width > 500 || height > 500) && width >= 200 && height >= 200
     }.count
 }
 
